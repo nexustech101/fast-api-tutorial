@@ -1,4 +1,4 @@
-# FastAPI Production-Ready Application
+# FastAPI Production-Ready Application | Example Tutorial Code
 
 This is a production-ready FastAPI application template that follows industry best practices.
 
