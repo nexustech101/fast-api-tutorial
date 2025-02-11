@@ -64,8 +64,9 @@ The API will be available at `http://localhost:8000`. Access the interactive API
 
 ## 📖 API Documentation
 
-### Creating a Pipeline
+### Pipeline Management Endpoints
 
+#### 1. Create Pipeline
 ```http
 POST /api/v1/pipeline/create
 ```
@@ -102,7 +103,7 @@ Create a new data pipeline with specified collectors, processors, and storage co
             }
         },
         {
-            "type": "analyzer",
+            "type": "analyzer"
         },
         {
             "type": "transformer",
@@ -122,8 +123,37 @@ Create a new data pipeline with specified collectors, processors, and storage co
 }
 ```
 
-### Executing a Pipeline
+#### 2. Update Pipeline Configuration
+```http
+PUT /api/v1/pipeline/{name}/config
+```
 
+Update an existing pipeline's configuration.
+
+**Request Body:** Same as create pipeline
+
+**Response:**
+```json
+{
+    "message": "Pipeline 'example_pipeline' configuration updated successfully"
+}
+```
+
+#### 3. Delete Pipeline
+```http
+DELETE /api/v1/pipeline/{name}
+```
+
+Delete an existing pipeline configuration.
+
+**Response:**
+```json
+{
+    "message": "Pipeline 'example_pipeline' deleted successfully"
+}
+```
+
+#### 4. Execute Pipeline
 ```http
 POST /api/v1/pipeline/{name}/execute
 ```
@@ -138,8 +168,7 @@ Execute a previously created pipeline.
 }
 ```
 
-### Checking Pipeline Status
-
+#### 5. Get Pipeline Status
 ```http
 GET /api/v1/pipeline/{name}/status
 ```
@@ -155,13 +184,80 @@ Get the current status of a pipeline.
 }
 ```
 
-### Retrieving Processed Data
+#### 6. Get Pipeline Statistics
+```http
+GET /api/v1/pipeline/{name}/stats
+```
 
+Get execution statistics for a pipeline.
+
+**Response:**
+```json
+{
+    "total_executions": 10,
+    "average_duration": 45.5,
+    "success_rate": 0.95,
+    "last_execution": "2025-02-11T18:44:13",
+    "data_volume": {
+        "rows_processed": 10000,
+        "storage_size_mb": 25
+    }
+}
+```
+
+#### 7. Get Pipeline Schema
+```http
+GET /api/v1/pipeline/{name}/schema
+```
+
+Get the data schema information for a pipeline.
+
+**Response:**
+```json
+{
+    "columns": [
+        {
+            "name": "id",
+            "type": "int64",
+            "nullable": false
+        },
+        {
+            "name": "name",
+            "type": "object",
+            "nullable": true
+        }
+    ],
+    "row_count": 1000,
+    "data_types": {
+        "id": "int64",
+        "name": "object"
+    },
+    "sample_data": [
+        {
+            "id": 1,
+            "name": "Example"
+        }
+    ]
+}
+```
+
+#### 8. Get Pipeline Data
 ```http
 GET /api/v1/pipeline/{name}/data
 ```
 
 Retrieve the latest processed data from a pipeline.
+
+**Response:**
+```json
+[
+    {
+        "id": 1,
+        "name": "Example",
+        "processed_value": 42
+    }
+]
+```
 
 ## 🏗️ Architecture
 
