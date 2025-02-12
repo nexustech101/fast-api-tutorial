@@ -1,6 +1,6 @@
 # Health Check
 Write-Host "Testing Health Check endpoint..."
-Invoke-WebRequest -Method GET -Uri "http://localhost:8000/api/v1/health" | Select-Object -ExpandProperty Content
+Invoke-WebRequest -Method GET -Uri "http://localhost:8000/health" | Select-Object -ExpandProperty Content
 
 # Create Pipeline
 Write-Host "`nCreating pipeline..."

@@ -1,0 +1,22 @@
+{
+  "columns": [
+    "id",
+    "full_name",
+    "user_handle",
+    "email",
+    "phone",
+    "website"
+  ],
+  "dtypes": {
+    "id": "int64",
+    "full_name": "object",
+    "user_handle": "object",
+    "email": "object",
+    "phone": "object",
+    "website": "object"
+  },
+  "shape": [
+    10,
+    6
+  ]
+}

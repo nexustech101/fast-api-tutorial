@@ -1,9 +1,10 @@
 """
 FastAPI routes for data pipeline operations.
 """
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Dict, List, Optional, Union
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import pandas as pd
 from loguru import logger
 
@@ -24,20 +25,51 @@ class PipelineConfig(BaseModel):
     processors: List[Dict]  # List of processor configurations
     storage_dir: str
 
-class PipelineStats(BaseModel):
-    """Pipeline statistics response model."""
-    total_executions: int
-    average_duration: float
-    success_rate: float
-    last_execution: Optional[str]
-    data_volume: Dict[str, int]
+class ColumnInfo(BaseModel):
+    """Column information in pipeline schema."""
+    name: str
+    type: str
+    nullable: bool
+    unique_values: int
+    missing_values: int
 
 class PipelineSchema(BaseModel):
     """Pipeline schema response model."""
-    columns: List[Dict[str, str]]
+    columns: List[ColumnInfo]
     row_count: int
+    column_count: int
     data_types: Dict[str, str]
     sample_data: Optional[List[Dict]]
+    memory_usage: Optional[Dict[str, Union[int, Dict[str, int]]]]
+
+class ExecutionInfo(BaseModel):
+    """Pipeline execution information."""
+    start_time: str
+    end_time: str
+    duration: float
+    status: str
+    rows_processed: int
+    error: Optional[str]
+
+class PipelineStats(BaseModel):
+    """Pipeline statistics response model."""
+    total_executions: int
+    successful_executions: int
+    failed_executions: int
+    success_rate: float
+    average_duration: float
+    total_rows_processed: int
+    last_execution: ExecutionInfo
+    last_error: Optional[str]
+
+class PipelineStatus(BaseModel):
+    """Pipeline status response model."""
+    status: str
+    progress: int
+    error: Optional[str]
+    start_time: Optional[str]
+    end_time: Optional[str]
+    duration: Optional[float]
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_pipeline(config: PipelineConfig):
@@ -48,8 +80,8 @@ async def create_pipeline(config: PipelineConfig):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Pipeline with name '{config.name}' already exists"
             )
-
-        # Initialize collectors based on configuration
+        
+        # Create collectors
         collectors = []
         for collector_config in config.collectors:
             if collector_config["type"] == "api":
@@ -64,33 +96,25 @@ async def create_pipeline(config: PipelineConfig):
             elif collector_config["type"] == "web":
                 collectors.append(WebScraper(
                     url=collector_config["url"],
-                    css_selectors=collector_config["selectors"]
+                    css_selectors=collector_config["css_selectors"]
                 ))
             else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unsupported collector type: {collector_config['type']}"
-                )
+                raise ValueError(f"Unknown collector type: {collector_config['type']}")
         
-        # Initialize processors
+        # Create processors
         processors = []
         for processor_config in config.processors:
             if processor_config["type"] == "cleaner":
-                processors.append(DataCleaner(config=processor_config["config"]))
+                processors.append(DataCleaner(processor_config["config"]))
             elif processor_config["type"] == "analyzer":
                 processors.append(DataAnalyzer())
             elif processor_config["type"] == "transformer":
-                processors.append(DataTransformer(
-                    config=processor_config["config"]
-                ))
+                processors.append(DataTransformer(processor_config["config"]))
             else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unsupported processor type: {processor_config['type']}"
-                )
+                raise ValueError(f"Unknown processor type: {processor_config['type']}")
         
-        # Initialize storage
-        storage = ParquetStorage(base_dir=config.storage_dir)
+        # Create storage
+        storage = ParquetStorage(config.storage_dir)
         
         # Create and store pipeline
         pipeline = Pipeline(
@@ -138,7 +162,7 @@ async def execute_pipeline(name: str):
         )
 
 @router.get("/{name}")
-async def get_pipeline_status(name: str):
+async def get_pipeline_status(name: str) -> PipelineStatus:
     """Get the current status of a pipeline."""
     pipeline = active_pipelines.get(name)
     if not pipeline:
@@ -147,7 +171,7 @@ async def get_pipeline_status(name: str):
             detail=f"Pipeline '{name}' not found"
         )
     
-    return pipeline.status
+    return PipelineStatus(**pipeline.status)
 
 @router.get("/{name}/data")
 async def get_pipeline_data(name: str):
@@ -185,8 +209,50 @@ async def update_pipeline_config(name: str, config: PipelineConfig):
                 detail=f"Pipeline '{name}' not found"
             )
         
+        # Delete existing pipeline
+        del active_pipelines[name]
+        
         # Create new pipeline with updated config
-        await create_pipeline(config)
+        collectors = []
+        for collector_config in config.collectors:
+            if collector_config["type"] == "api":
+                collectors.append(APICollector(
+                    endpoint=collector_config["endpoint"],
+                    headers=collector_config.get("headers", {})
+                ))
+            elif collector_config["type"] == "csv":
+                collectors.append(CSVCollector(
+                    file_path=collector_config["file_path"]
+                ))
+            elif collector_config["type"] == "web":
+                collectors.append(WebScraper(
+                    url=collector_config["url"],
+                    css_selectors=collector_config["css_selectors"]
+                ))
+            else:
+                raise ValueError(f"Unknown collector type: {collector_config['type']}")
+        
+        processors = []
+        for processor_config in config.processors:
+            if processor_config["type"] == "cleaner":
+                processors.append(DataCleaner(processor_config["config"]))
+            elif processor_config["type"] == "analyzer":
+                processors.append(DataAnalyzer())
+            elif processor_config["type"] == "transformer":
+                processors.append(DataTransformer(processor_config["config"]))
+            else:
+                raise ValueError(f"Unknown processor type: {processor_config['type']}")
+        
+        storage = ParquetStorage(config.storage_dir)
+        
+        pipeline = Pipeline(
+            collectors=collectors,
+            processors=processors,
+            storage=storage,
+            name=config.name
+        )
+        active_pipelines[config.name] = pipeline
+        
         return {"message": f"Pipeline '{name}' updated successfully"}
     except HTTPException as he:
         raise he
