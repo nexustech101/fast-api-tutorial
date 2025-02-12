@@ -1,0 +1,79 @@
+### Health Check
+GET http://localhost:8000/health
+
+### Create a new pipeline
+POST http://localhost:8000/api/v1/pipeline/create
+Content-Type: application/json
+
+{
+    "name": "users-pipeline",
+    "collectors": [
+        {
+            "type": "api",
+            "endpoint": "https://jsonplaceholder.typicode.com/users",
+            "headers": {}
+        }
+    ],
+    "processors": [
+        {
+            "type": "cleaner",
+            "config": {
+                "drop_columns": ["address", "company"],
+                "fill_na": {"email": "no-email", "phone": "no-phone"}
+            }
+        },
+        {
+            "type": "transformer",
+            "config": {
+                "rename_columns": {
+                    "name": "full_name",
+                    "username": "user_handle"
+                }
+            }
+        }
+    ],
+    "storage_dir": "data/processed"
+}
+
+### Execute the pipeline
+POST http://localhost:8000/api/v1/pipeline/users-pipeline/execute
+
+### Get pipeline status
+GET http://localhost:8000/api/v1/pipeline/users-pipeline/status
+
+### Get pipeline data
+GET http://localhost:8000/api/v1/pipeline/users-pipeline/data
+
+### Get pipeline schema
+GET http://localhost:8000/api/v1/pipeline/users-pipeline/schema
+
+### Get pipeline statistics
+GET http://localhost:8000/api/v1/pipeline/users-pipeline/stats
+
+### Update pipeline configuration
+PUT http://localhost:8000/api/v1/pipeline/users-pipeline/update
+Content-Type: application/json
+
+{
+    "name": "users-pipeline",
+    "collectors": [
+        {
+            "type": "api",
+            "endpoint": "https://jsonplaceholder.typicode.com/users",
+            "headers": {}
+        }
+    ],
+    "processors": [
+        {
+            "type": "cleaner",
+            "config": {
+                "drop_columns": ["address", "company", "website"],
+                "fill_na": {"email": "no-email", "phone": "no-phone"}
+            }
+        }
+    ],
+    "storage_dir": "data/processed"
+}
+
+### Delete the pipeline
+DELETE http://localhost:8000/api/v1/pipeline/users-pipeline/delete

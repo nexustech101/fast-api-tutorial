@@ -1,87 +1,84 @@
 """
-Data storage components for processed data.
+Data storage implementations for pipeline outputs.
 """
 from abc import ABC, abstractmethod
-from datetime import datetime
 import os
-from typing import Optional
+from pathlib import Path
 import pandas as pd
-from loguru import logger
 import pyarrow as pa
 import pyarrow.parquet as pq
-import sqlite3
+from loguru import logger
 
 class DataStorage(ABC):
-    """Base class for data storage implementations."""
+    """Base class for data storage."""
     
     @abstractmethod
     def save(self, df: pd.DataFrame, name: str) -> str:
-        """Save the DataFrame."""
+        """Save data to storage."""
         pass
     
     @abstractmethod
     def load(self, name: str) -> pd.DataFrame:
-        """Load the DataFrame."""
+        """Load data from storage."""
         pass
 
 class ParquetStorage(DataStorage):
     """Storage implementation using Parquet format."""
     
     def __init__(self, base_dir: str):
-        self.base_dir = base_dir
-        os.makedirs(base_dir, exist_ok=True)
-    
-    def _get_path(self, name: str) -> str:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return os.path.join(self.base_dir, f"{name}_{timestamp}.parquet")
+        self.base_dir = Path(base_dir)
+        self.base_dir.mkdir(parents=True, exist_ok=True)
     
     def save(self, df: pd.DataFrame, name: str) -> str:
+        """
+        Save DataFrame to Parquet format.
+        
+        Args:
+            df: DataFrame to save
+            name: Name of the pipeline
+            
+        Returns:
+            str: Path where the data was saved
+        """
         try:
-            file_path = self._get_path(name)
+            # Create directory if it doesn't exist
+            pipeline_dir = self.base_dir / name
+            pipeline_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save with timestamp
+            file_path = pipeline_dir / f"latest.parquet"
+            
+            # Convert to parquet and save
             table = pa.Table.from_pandas(df)
-            pq.write_table(table, file_path, compression='snappy')
-            logger.info(f"Data saved to {file_path}")
-            return file_path
+            pq.write_table(table, file_path, compression="snappy")
+            
+            return str(file_path)
+            
         except Exception as e:
-            logger.error(f"Error saving data to parquet: {str(e)}")
+            logger.error(f"Error saving data to Parquet: {str(e)}")
             raise
     
     def load(self, name: str) -> pd.DataFrame:
+        """
+        Load DataFrame from Parquet format.
+        
+        Args:
+            name: Name of the pipeline
+            
+        Returns:
+            pd.DataFrame: Loaded data
+        """
         try:
-            # Get the latest file for the given name
-            files = [f for f in os.listdir(self.base_dir) if f.startswith(name) and f.endswith('.parquet')]
-            if not files:
-                raise FileNotFoundError(f"No parquet files found for {name}")
+            file_path = self.base_dir / name / "latest.parquet"
             
-            latest_file = max(files, key=lambda x: os.path.getctime(os.path.join(self.base_dir, x)))
-            file_path = os.path.join(self.base_dir, latest_file)
+            if not file_path.exists():
+                logger.warning(f"No data found for pipeline '{name}'")
+                return pd.DataFrame()
             
+            # Read parquet file
             table = pq.read_table(file_path)
             return table.to_pandas()
+            
         except Exception as e:
-            logger.error(f"Error loading data from parquet: {str(e)}")
-            raise
-
-class SQLiteStorage(DataStorage):
-    """Storage implementation using SQLite database."""
-    
-    def __init__(self, db_path: str):
-        self.db_path = db_path
-    
-    def save(self, df: pd.DataFrame, name: str) -> str:
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                df.to_sql(name, conn, if_exists='replace', index=False)
-                logger.info(f"Data saved to table {name} in {self.db_path}")
-                return f"{self.db_path}:{name}"
-        except Exception as e:
-            logger.error(f"Error saving data to SQLite: {str(e)}")
-            raise
-    
-    def load(self, name: str) -> pd.DataFrame:
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                return pd.read_sql(f"SELECT * FROM {name}", conn)
-        except Exception as e:
-            logger.error(f"Error loading data from SQLite: {str(e)}")
+            logger.error(f"Error loading data from Parquet: {str(e)}")
             raise
